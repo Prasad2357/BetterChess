@@ -348,33 +348,41 @@ class Move:
         return black_castle_move
 
     @staticmethod
-    def get_time_spent_on_move(path_temp: str, move_num: int, timers: tuple) -> float:
-        """Gets the time spent on a given move in seconds.
-
-        Args:
-            path_temp (str): Pgn filepath for current game.
-            move_num (int): Move number.
-            timers (tuple): Time control and time interval of the current game.
-
-        Returns:
-            float: Seconds to make a move.
+    def get_time_spent_on_move(path_temp: str, move_num: int, timers: tuple):
         """
-        chess_game_pgn = open(file=path_temp)
-        game = chess.pgn.read_game(handle=chess_game_pgn)
-        timerem_w, timerem_b, time_int = timers[0], timers[1], timers[2]
+        Gets the time spent on a given move in seconds.
+        Returns None if clock data is unavailable for that move.
+        """
+        with open(path_temp, encoding="utf-8") as chess_game_pgn:
+            game = chess.pgn.read_game(chess_game_pgn)
+
+        timerem_w, timerem_b, time_int = timers
         time_list = []
+
         for num, move in enumerate(game.mainline()):
-            if num % 2 == 0:
+            if num % 2 == 0:  # White move
                 move_time_w = move.clock()
-                time_spent = round(timerem_w - move_time_w + time_int, 3)
-                time_list.append(time_spent)
-                timerem_w = move_time_w
-            else:
+                if timerem_w is None or move_time_w is None or time_int is None:
+                    time_list.append(None)
+                else:
+                    time_spent = round(timerem_w - move_time_w + time_int, 3)
+                    time_list.append(time_spent)
+                    timerem_w = move_time_w
+            else:  # Black move
                 move_time_b = move.clock()
-                time_spent = round(timerem_b - move_time_b + time_int, 3)
-                time_list.append(time_spent)
-                timerem_b = move_time_b
-        return time_list[move_num]
+                if timerem_b is None or move_time_b is None or time_int is None:
+                    time_list.append(None)
+                else:
+                    time_spent = round(timerem_b - move_time_b + time_int, 3)
+                    time_list.append(time_spent)
+                    timerem_b = move_time_b
+
+        # Safe return
+        if move_num < len(time_list):
+            return time_list[move_num]
+
+        return None
+
 
     @staticmethod
     def filter_timecont_header(path_temp: str) -> tuple[float, float, int]:
@@ -427,9 +435,8 @@ class Move:
             conn.commit()
             conn.close()
         elif env_handler.db_type == "sqlite":
-            conn = sqlite3.connect(
-                FileHandler(self.input_handler.username).path_database
-            )
+
+            conn = sqlite3.connect(self.file_handler.path_database)
             move_df.to_sql("move_data", conn, if_exists="append", index=False)
             conn.commit()
             conn.close()

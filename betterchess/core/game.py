@@ -40,7 +40,7 @@ class Game:
             self.iter_metadata,
         )
         if (
-            self.game_metadata["game_datetime"] >= log_dt
+            log_dt is None or self.game_metadata["game_datetime"] >= log_dt
             and self.game_metadata["game_datetime"] >= self.input_handler.start_date
         ):
             start_time = time.perf_counter()
@@ -314,11 +314,8 @@ class Game:
         )
 
     def export_game_data(self, game_df: pd.DataFrame, env_handler: EnvHandler):
-        """Exports game data to database depending on `.env` parameter `DB_TYPE`.
+        """Exports game data to database depending on `.env` parameter `DB_TYPE`."""
 
-        Args:
-            game_df (pd.Dataframe): dataframe of game data
-        """
         if env_handler.db_type == "mysql":
             conn = mysql.connector.connect(
                 host=self.env_handler.mysql_host,
@@ -327,18 +324,22 @@ class Game:
                 password=self.env_handler.mysql_password,
             )
             mysql_engine = create_engine(
-                f"{self.env_handler.mysql_driver}://{self.env_handler.mysql_user}:{self.env_handler.mysql_password}@{self.env_handler.mysql_host}/{self.env_handler.mysql_db}"
+                f"{self.env_handler.mysql_driver}://"
+                f"{self.env_handler.mysql_user}:"
+                f"{self.env_handler.mysql_password}@"
+                f"{self.env_handler.mysql_host}/"
+                f"{self.env_handler.mysql_db}"
             )
             game_df.to_sql("game_data", mysql_engine, if_exists="append", index=False)
             conn.commit()
             conn.close()
+
         elif env_handler.db_type == "sqlite":
-            conn = sqlite3.connect(
-                FileHandler(self.input_handler.username).path_database
-            )
+            conn = sqlite3.connect(self.file_handler.path_database)
             game_df.to_sql("game_data", conn, if_exists="append", index=False)
             conn.commit()
             conn.close()
+
 
     @staticmethod
     def game_time_of_day(game_datetime: datetime) -> str:
@@ -757,19 +758,23 @@ class Prepare:
         """
         return self.get_last_logged_game(path_userlogfile)
 
-    def get_last_logged_game(self, path_userlogfile: str) -> datetime:
-        """Returns the last logged game date.
-
-        Args:
-            path_userlogfile (str): User log file.
-
-        Returns:
-            datetime:  Datetime of last logged game.
+    def get_last_logged_game(self, path_userlogfile):
         """
-        game_log_list = self.get_game_log_list(path_userlogfile)
-        llog = game_log_list[-1]
-        llog_date_str = llog.split("|")[2].strip()
-        return datetime.strptime(llog_date_str, "%Y-%m-%d %H:%M:%S")
+        Safely extracts the last logged game datetime.
+        Returns None if no valid log entry exists.
+        """
+        log_list = self.get_game_log_list(path_userlogfile)
+
+        for line in reversed(log_list):
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 3:
+                try:
+                    return datetime.fromisoformat(parts[2])
+                except ValueError:
+                    continue
+
+        return None
+
 
     def get_game_log_list(self, path_userlogfile: str) -> list:
         """Collects the log list.
@@ -786,13 +791,8 @@ class Prepare:
             self.logfile_line_checker_multi(game_log_list, lines)
         return game_log_list
 
-    def logfile_line_checker_multi(self, game_log_list: list, lines: list[str]) -> None:
-        """Filter for log list to remove lines not relating to the user/game module.
-
-        Args:
-            game_log_list (list): List of log lines
-            lines (list[str]): Lines withing the log file.
-        """
+    def logfile_line_checker_multi(self, game_log_list, lines):
         game_log_list.extend(
-            line for line in lines if ("user" in line) or ("game" in line)
+            line for line in lines if line.count("|") >= 3
         )
+

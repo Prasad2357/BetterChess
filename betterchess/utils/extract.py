@@ -2,14 +2,17 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from logging import Logger
+from venv import logger
 
-import chessdotcom
+# import chessdotcom
 import mysql.connector
 import pandas as pd
 import requests
 from sqlalchemy import create_engine
 
 from betterchess.utils.handlers import EnvHandler, FileHandler, InputHandler, RunHandler
+from betterchess.utils.pgn_loader import load_games_from_user_pgns
+
 
 
 @dataclass
@@ -21,31 +24,12 @@ class Extract:
     run_handler: RunHandler
     env_handler: EnvHandler
 
-    def run_data_extract(
-        self, username: str, path_userlogfile: str, logger: Logger
-    ) -> None:
-        """Runs the current data extract.
+    def run_data_extract(self, username, logfile_path, logger):
+        games = load_games_from_user_pgns(username)
 
-        Args:
-            username (str): Current users username.
-            logfilepath (str): Logfile path.
-            logger (Logger): Logger object.
-        """
-        username_list, url_date_list, games_list = [], [], []
-        self.init_user_logfile(username, logger)
-        urls = chessdotcom.get_player_game_archives(username).json
-        num_urls = len(urls["archives"])
-        pgn_df = self.get_data_from_urls(
-            urls,
-            num_urls,
-            logger,
-            path_userlogfile,
-            username,
-            username_list,
-            url_date_list,
-            games_list,
-        )
-        self.export_pgn_data(pgn_df)
+        logger.info(f"Loaded {len(games)} PGN games for {username}")
+
+        self.games = games
 
     def init_user_logfile(self, username: str, logger: Logger) -> None:
         """Initalises the current users logfile.
