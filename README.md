@@ -1,81 +1,175 @@
-# Better Chess
+# Better Chess (Fork)
 
-[![Build](https://github.com/AidanInceer/BetterChess/actions/workflows/build.yml/badge.svg)](https://github.com/AidanInceer/BetterChess/actions/workflows/build.yml)
-[![Lint](https://github.com/AidanInceer/BetterChess/actions/workflows/lint.yml/badge.svg)](https://github.com/AidanInceer/BetterChess/actions/workflows/lint.yml)
-[![Test](https://github.com/AidanInceer/BetterChess/actions/workflows/test.yml/badge.svg)](https://github.com/AidanInceer/BetterChess/actions/workflows/test.yml)
-[![Scan](https://github.com/AidanInceer/BetterChess/actions/workflows/scan.yml/badge.svg)](https://github.com/AidanInceer/BetterChess/actions/workflows/scan.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+> **Note**  
+> This repository is a fork of the original **BetterChess** project by **Aidan Inceer**.  
+> It includes significant architectural and analytical extensions while preserving
+> the original MIT license and attribution.
 
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=AidanInceer_BetterChess&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=AidanInceer_BetterChess)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=AidanInceer_BetterChess&metric=coverage)](https://sonarcloud.io/summary/new_code?id=AidanInceer_BetterChess)
-[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=AidanInceer_BetterChess&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=AidanInceer_BetterChess)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=AidanInceer_BetterChess&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=AidanInceer_BetterChess)
-[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=AidanInceer_BetterChess&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=AidanInceer_BetterChess)
-[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=AidanInceer_BetterChess&metric=bugs)](https://sonarcloud.io/summary/new_code?id=AidanInceer_BetterChess)
+---
 
-This is a project which enables a user to peform bulk analysis on their **chess.com** games for free,
-pull out insights and eventually have access to an interactive webapp to help them develop further.
+## Overview
 
-## Installation & Setup
+Better Chess enables bulk analysis of chess games using the Stockfish engine to extract
+move-level and game-level insights.
 
-Currently only works with `python 3.9`. Download the repository and follow the steps below:
+This fork focuses on **robustness, extensibility, and offline analysis** by introducing
+a **PGN-first data pipeline** and a stable SQLite-based storage layer.
 
-``` sh
+---
+
+## Architectural Changes in This Fork
+
+### 1. PGN-First Analysis Pipeline
+
+**Original Design**
+- Games fetched directly from the chess.com API
+- Dependent on external API availability
+
+**Updated Design**
+- Games loaded directly from local PGN files
+- Supports separate PGNs for White and Black games
+- Enables fully offline and reproducible analysis
+
+Example structure:
+```txt
+pgns/
+└── ozil_33/
+    ├── ozil_33-white.pgn
+    └── ozil_33-black.pgn
+```
+
+## 2. SQLite as Default Persistence Layer
+
+- SQLite is the default database backend
+- Move-level and game-level data stored persistently
+- Enables fast querying and downstream analytics
+
+### Tables
+
+- `move_data`
+- `game_data`
+
+---
+
+## 3. Explicit Schema Management
+
+- Database schema initialized once per project
+- Schema aligned exactly with Pandas DataFrames
+- Prevents runtime insert and column mismatch errors
+- No schema mutations during analysis execution
+
+---
+
+## 4. Robust Engine and Edge-Case Handling
+
+- Defensive handling of missing clock data in PGNs
+- Safe evaluation parsing for mate scores
+- Engine fallback logic for endgame and forced-mate scenarios
+- Prevents crashes during large batch runs
+
+---
+
+## 5. Clean Dependency Injection
+
+- `FileHandler`, `EnvHandler`, `RunHandler`, and `InputHandler` are initialized once
+- No repeated re-instantiation inside move or game loops
+- Clear separation of responsibilities across modules
+
+---
+
+## Extracted Move-Level Features
+
+Each analysed move includes:
+
+- Engine evaluation
+- Best-move comparison
+- Evaluation loss
+- Accuracy score
+- Move classification
+- Piece type
+- Move colour
+- Castling information
+- Time spent per move (when available)
+
+---
+
+## Installation and Setup
+
+### Requirements
+
+- Python `3.9`
+- Stockfish (local binary)
+
+### Environment Setup
+
+```sh
 python -m venv venv
-```
-
-``` sh
 venv/scripts/activate
+pip install -r requirements.txt
 ```
 
-``` sh
-pip install requirements.txt
-```
+## Environment Configuration
 
-Add a `.env` you the root of your project. This will be used to add your database type, information and stockfish filepaths.
-
-Stockfish will need to be downloaded from: (https://stockfishchess.org/download/) and added to your `./lib/` folder, the version may vary and therefore you need to add the folder name and file name to your `.env` - see below.
-
-If using an external database you will have to configure and set this up - then add these variables into the `.env` file.
+Create a `.env` file in the project root:
 
 ```conf
-# Select database type from the following options ('mysql', 'sqlite')
-# to be implemented: csv, postgresql, cloud (aws, azure)
-DB_TYPE = ...
+# Database
+DB_TYPE=sqlite
 
+# Stockfish configuration
+stockfish_folder=stockfish-windows-x86-64-avx2
+stockfish_exe_file=stockfish-windows-x86-64-avx2.exe
+```
 
-# Fill in if using mysql database. 
-mysql_driver = ...
-mysql_user = ...
-mysql_password = ...
-mysql_host = ...
-mysql_db = ...
+# Running the Project
+Run the application:
 
-# Fill in stockfish file and details
-stockfish_folder = ...
-stockfish_exe_file = ...
-
+```
+python main.py
 ```
 
 
-## Running
+### Options
 
-Running `main.py` will give two options: `manage` and `run`. Firstly `manage` will allow you to quickly get information about the database - see below for the following options:
+- `run` – Analyse PGN games  
+- `manage` – Inspect or reset the database
 
-```txt
-reset - Reset the database and cleans down all the log files.
-size - the size of the tables.
-head - View the head of the tables.
-pass - cancel
-```
+---
 
-The second option, `run`, will allow you to analyse a given users game data. You will need to enter a chess.com username, engine depth, analysis start year & month.
-e.g.
-(https://github.com/AidanInceer/BetterChess/blob/master/imgs/examples/run.png)
+## Intended Use Cases
+
+- Personal chess improvement and self-analysis  
+- Feature generation for machine learning projects  
+- Longitudinal performance tracking  
+- Portfolio demonstration of real-world data pipelines  
+
+---
+
+## Credits
+
+### Original Author
+
+- **Aidan Inceer**  
+- Repository: https://github.com/AidanInceer/BetterChess  
+- License: MIT  
+
+### Fork Maintainer
+
+- **Prasad Jagadale**
+
+#### Contributions in this fork
+
+- PGN-first ingestion architecture  
+- SQLite-first persistence layer  
+- Schema-safe ETL pipeline  
+- Engine robustness improvements  
+- Extended move-level analytics  
+
+---
+
+## License
+
+This project is licensed under the **MIT License**.  
+All original license terms and attributions are preserved.
 
 
-
-## Authors
-
-Aidan Inceer
